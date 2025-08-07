@@ -468,7 +468,7 @@
                     const metadata = {
                         name: nftName,
                         description: nftDescription,
-                        image: nftImage || `https://via.placeholder.com/400x400/9945FF/FFFFFF?text=${encodeURIComponent(nftName)}`,
+                        image: nftImage || `https://picsum.photos/400/400?random=${Date.now()}`,
                         attributes: [
                             {
                                 trait_type: "Creator",
@@ -477,6 +477,10 @@
                             {
                                 trait_type: "Created Date",
                                 value: new Date().toISOString().split('T')[0]
+                            },
+                            {
+                                trait_type: "NFT Name",
+                                value: nftName
                             }
                         ]
                     };
@@ -622,11 +626,14 @@
                                     <input 
                                         className="form-input"
                                         type="url"
-                                        placeholder="https://example.com/image.png (boş bırakılırsa otomatik oluşturulur)"
+                                        placeholder="https://i.imgur.com/example.jpg (boş bırakılırsa rastgele resim atar)"
                                         value={nftImage}
                                         onChange={(e) => setNftImage(e.target.value)}
                                         disabled={minting}
                                     />
+                                    <small style={{color: 'rgba(255,255,255,0.7)', fontSize: '12px', marginTop: '5px'}}>
+                                        💡 Öneri: Imgur, Cloudinary ya da kendi hosting'inizden URL kullanın
+                                    </small>
                                 </div>
                                 
                                 <button 
