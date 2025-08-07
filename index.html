@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NFT Marketplace - Aşama 1</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.22.5/babel.min.js"></script>
+    <script>
+        // Buffer polyfill - Solana Web3.js için
+        window.Buffer = window.Buffer || {
+            from: (data, encoding) => {
+                if (typeof data === 'string') {
+                    return new TextEncoder().encode(data);
+                }
+                return new Uint8Array(data);
+            },
+            alloc: (size) => new Uint8Array(size),
+            isBuffer: () => false
+        };
+    </script>
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        .wallet-section {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .wallet-button {
+            background: #9945FF;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .wallet-button:hover {
+            background: #7c3aed;
+            transform: translateY(-2px);
+        }
+        
+        .wallet-button:disabled {
+            background: #6b7280;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .wallet-info {
+            color: white;
+            font-size: 14px;
+        }
+        
+        .nft-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 25px;
+            margin-top: 20px;
+        }
+        
+        .nft-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .nft-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        }
+        
+        .nft-image {
+            width: 100%;
+            height: 200px;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .nft-content {
+            padding: 20px;
+        }
+        
+        .nft-title {
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        
+        .nft-description {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+        
+        .nft-price {
+            color: #9945FF;
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        
+        .buy-button {
+            background: #00d4aa;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .buy-button:hover {
+            background: #00b894;
+        }
+        
+        .status-message {
+            text-align: center;
+            color: white;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .phase-info {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            color: white;
+        }
+        
+        .phase-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #9945FF;
+        }
+        
+        .balance-info {
+            background: rgba(0, 212, 170, 0.1);
+            border: 1px solid #00d4aa;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            color: white;
+        }
+        
+        .deploy-info {
+            background: rgba(255, 193, 7, 0.1);
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Solana Web3.js yüklenene kadar bekle
+        const initializeSolana = () => {
+            if (typeof solanaWeb3 === 'undefined') {
+                console.log('Solana Web3.js henüz yüklenmedi, 1 saniye bekliyor...');
+                setTimeout(initializeSolana, 1000);
+                return false;
+            }
+            return true;
+        };
+
+        // Solana bağlantı ayarları
+        let connection = null;
+        const SOLANA_NETWORK = 'devnet';
+        
+        // Solana Web3.js hazır olduğunda bağlantıyı kur
+        const setupSolanaConnection = () => {
+            if (typeof solanaWeb3 !== 'undefined') {
+                connection = new solanaWeb3.Connection(
+                    solanaWeb3.clusterApiUrl(SOLANA_NETWORK),
+                    'confirmed'
+                );
+                return true;
+            }
+            return false;
+        };
+
+        // Örnek NFT verileri (statik)
+        const mockNFTs = [
+            {
+                id: 1,
+                name: "Cosmic Cat #001",
+                description: "Galaksinin en cool kedisi",
+                price: "2.5 SOL",
+                image: "🐱‍🚀"
+            },
+            {
+                id: 2,
+                name: "Digital Dragon #042",
+                description: "Efsanevi dijital ejder",
+                price: "5.0 SOL",
+                image: "🐉"
+            },
+            {
+                id: 3,
+                name: "Pixel Penguin #123",
+                description: "Antarktika'nın en şık pengueni",
+                price: "1.8 SOL",
+                image: "🐧"
+            },
+            {
+                id: 4,
+                name: "Crypto Unicorn #777",
+                description: "Nadir bulunan kripto tek boynuzlu at",
+                price: "10.0 SOL",
+                image: "🦄"
+            },
+            {
+                id: 5,
+                name: "Space Monkey #456",
+                description: "Uzayın en zeki maymunu",
+                price: "3.2 SOL",
+                image: "🐒"
+            },
+            {
+                id: 6,
+                name: "Neon Fish #089",
+                description: "Denizin parlayan güzelliği",
+                price: "0.9 SOL",
+                image: "🐠"
+            }
+        ];
+
+        function App() {
+            const [walletConnected, setWalletConnected] = useState(false);
+            const [walletAddress, setWalletAddress] = useState('');
+            const [connecting, setConnecting] = useState(false);
+            const [balance, setBalance] = useState(0);
+            const [loadingBalance, setLoadingBalance] = useState(false);
+
+            // Phantom wallet bağlantısını kontrol et
+            useEffect(() => {
+                // Önce Solana Web3.js'in yüklendiğinden emin ol
+                const checkAndInit = () => {
+                    if (setupSolanaConnection()) {
+                        checkWalletConnection();
+                    } else {
+                        setTimeout(checkAndInit, 500);
+                    }
+                };
+                checkAndInit();
+            }, []);
+
+            const checkWalletConnection = async () => {
+                try {
+                    const { solana } = window;
+                    if (solana && solana.isPhantom) {
+                        const response = await solana.connect({ onlyIfTrusted: true });
+                        if (response.publicKey) {
+                            setWalletConnected(true);
+                            setWalletAddress(response.publicKey.toString());
+                            await getBalance(response.publicKey);
+                        }
+                    }
+                } catch (error) {
+                    console.log('Wallet bağlantı kontrolü başarısız:', error);
+                }
+            };
+
+            const getBalance = async (publicKey) => {
+                if (!connection) {
+                    console.log('Solana bağlantısı henüz hazır değil');
+                    return;
+                }
+                
+                setLoadingBalance(true);
+                try {
+                    const balance = await connection.getBalance(publicKey);
+                    setBalance(balance / solanaWeb3.LAMPORTS_PER_SOL); // SOL'a çevir
+                } catch (error) {
+                    console.error('Bakiye alma hatası:', error);
+                } finally {
+                    setLoadingBalance(false);
+                }
+            };
+
+            const connectWallet = async () => {
+                if (!window.solana || !window.solana.isPhantom) {
+                    alert('Phantom wallet bulunamadı! Lütfen Phantom uzantısını yükleyin.');
+                    window.open('https://phantom.app/', '_blank');
+                    return;
+                }
+
+                setConnecting(true);
+                try {
+                    const response = await window.solana.connect();
+                    setWalletConnected(true);
+                    setWalletAddress(response.publicKey.toString());
+                    await getBalance(response.publicKey);
+                } catch (error) {
+                    console.error('Wallet bağlantı hatası:', error);
+                    alert('Wallet bağlantısı başarısız!');
+                } finally {
+                    setConnecting(false);
+                }
+            };
+
+            const disconnectWallet = async () => {
+                try {
+                    await window.solana.disconnect();
+                    setWalletConnected(false);
+                    setWalletAddress('');
+                } catch (error) {
+                    console.error('Wallet bağlantı kesme hatası:', error);
+                }
+            };
+
+            const formatAddress = (address) => {
+                return `${address.slice(0, 4)}...${address.slice(-4)}`;
+            };
+
+            const handleBuyNFT = (nft) => {
+                if (!walletConnected) {
+                    alert('Önce wallet\'ınızı bağlayın!');
+                    return;
+                }
+                alert(`${nft.name} satın alma özelliği sonraki aşamada eklenecek!`);
+            };
+
+            return (
+                <div className="container">
+                    <div className="phase-info">
+                        <div className="phase-title">🚀 Aşama 2: Solana Web3.js Bağlantısı</div>
+                        <p>✅ React uygulaması kuruldu</p>
+                        <p>✅ Statik NFT listesi oluşturuldu</p>
+                        <p>✅ Phantom wallet bağlantısı eklendi</p>
+                        <p>✅ Solana Web3.js entegre edildi</p>
+                        <p>✅ Devnet bağlantısı aktif</p>
+                        <p>✅ Gerçek bakiye okuma fonksiyonu</p>
+                        <p>🔜 Sonraki aşama: NFT mint etme</p>
+                    </div>
+
+                    {walletConnected && (
+                        <div className="balance-info">
+                            <h3>💰 Wallet Bilgileri</h3>
+                            <p><strong>Adres:</strong> {formatAddress(walletAddress)}</p>
+                            <p><strong>Network:</strong> Devnet (Test)</p>
+                            <p><strong>Bakiye:</strong> {loadingBalance ? 'Yükleniyor...' : `${balance.toFixed(4)} SOL`}</p>
+                            {balance === 0 && (
+                                <p style={{color: '#ffc107', marginTop: '10px'}}>
+                                    ⚠️ Test SOL'u yok! <a href="https://solfaucet.com/" target="_blank" style={{color: '#00d4aa'}}>Buradan ücretsiz SOL al</a>
+                                </p>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="deploy-info">
+                        <h3>🚀 Vercel'e Deploy Edilmeye Hazır!</h3>
+                        <p><strong>Dosya adı:</strong> index.html</p>
+                        <p><strong>Gerekli:</strong> Sadece bu tek dosya yeterli</p>
+                        <p><strong>Deploy:</strong> Drag & drop Vercel'e at</p>
+                        <p><strong>Test için:</strong> Phantom'u Devnet'e geçirmeyi unutma!</p>
+                    </div>
+
+                    <header className="header">
+                        <div className="logo">🎨 NFT Marketplace</div>
+                        <div className="wallet-section">
+                            {walletConnected ? (
+                                <>
+                                    <div className="wallet-info">
+                                        🟢 Bağlandı: {formatAddress(walletAddress)}
+                                    </div>
+                                    <button 
+                                        className="wallet-button" 
+                                        onClick={disconnectWallet}
+                                    >
+                                        Bağlantıyı Kes
+                                    </button>
+                                </>
+                            ) : (
+                                <button 
+                                    className="wallet-button" 
+                                    onClick={connectWallet}
+                                    disabled={connecting}
+                                >
+                                    {connecting ? 'Bağlanıyor...' : '👻 Phantom Bağla'}
+                                </button>
+                            )}
+                        </div>
+                    </header>
+
+                    <div className="status-message">
+                        <p>🎯 <strong>Aşama 2 Tamamlandı!</strong></p>
+                        <p>Solana Web3.js entegre edildi. Gerçek blockchain bağlantısı aktif. Wallet bakiyesi okuyor!</p>
+                    </div>
+
+                    <div className="nft-grid">
+                        {mockNFTs.map(nft => (
+                            <div key={nft.id} className="nft-card">
+                                <div className="nft-image">
+                                    {nft.image}
+                                </div>
+                                <div className="nft-content">
+                                    <div className="nft-title">{nft.name}</div>
+                                    <div className="nft-description">{nft.description}</div>
+                                    <div className="nft-price">💰 {nft.price}</div>
+                                    <button 
+                                        className="buy-button"
+                                        onClick={() => handleBuyNFT(nft)}
+                                    >
+                                        Satın Al
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
