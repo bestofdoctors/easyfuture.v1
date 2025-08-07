@@ -92,6 +92,11 @@
             border: 1px solid #ff6b6b;
         }
         
+        .generate-wallet-button {
+            background: linear-gradient(45deg, #22c55e, #16a34a);
+            color: white;
+        }
+        
         .properties-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -154,6 +159,11 @@
             white-space: pre-line;
         }
         
+        .status.error {
+            background: rgba(255, 107, 107, 0.1);
+            border-color: #ff6b6b;
+        }
+        
         .portfolio {
             background: rgba(153, 69, 255, 0.1);
             border: 1px solid #9945FF;
@@ -199,6 +209,16 @@
             50% { opacity: 0.6; }
             100% { opacity: 1; }
         }
+        
+        .platform-wallet-info {
+            background: rgba(255, 215, 0, 0.1);
+            border: 1px solid #ffd700;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+            text-align: center;
+            font-size: 13px;
+        }
     </style>
 </head>
 <body>
@@ -207,11 +227,13 @@
     <script type="text/babel">
         const { useState, useEffect, useCallback } = React;
 
-        // Platform treasury wallet
-        const PLATFORM_WALLET = 'DevS1gn4LPGA9ZGN95R2DBB5HRKjKNP5BpYc6';
-
         function App() {
+            // Platform wallet - Geçerli bir Solana Devnet adresi kullan
+            // Bu sizin kendi Phantom wallet adresiniz olabilir veya yeni bir wallet oluşturabilirsiniz
+            const [PLATFORM_WALLET, setPlatformWallet] = useState('11111111111111111111111111111111');
+            
             const [message, setMessage] = useState('Phantom wallet bağlayın veya simülasyon modunda devam edin.');
+            const [messageType, setMessageType] = useState('info');
             const [portfolio, setPortfolio] = useState([]);
             const [balance, setBalance] = useState(0);
             const [walletConnected, setWalletConnected] = useState(false);
@@ -220,6 +242,7 @@
             const [isSimulation, setIsSimulation] = useState(false);
             const [processing, setProcessing] = useState(false);
             const [connection, setConnection] = useState(null);
+            const [platformBalance, setPlatformBalance] = useState(0);
 
             // Initialize Solana connection
             useEffect(() => {
@@ -230,15 +253,15 @@
                             'confirmed'
                         );
                         setConnection(conn);
+                        console.log('Solana connection initialized');
                     } else {
-                        // Retry if Web3.js not loaded yet
                         setTimeout(initConnection, 500);
                     }
                 };
                 initConnection();
             }, []);
 
-            // Load portfolio from localStorage
+            // Load portfolio and platform wallet from localStorage
             useEffect(() => {
                 const savedPortfolio = localStorage.getItem('realEstatePortfolio');
                 if (savedPortfolio) {
@@ -249,24 +272,54 @@
                     }
                 }
                 
-                // Check for auto-connect
-                checkWalletConnection();
+                // Load saved platform wallet
+                const savedPlatformWallet = localStorage.getItem('platformWallet');
+                if (savedPlatformWallet) {
+                    setPlatformWallet(savedPlatformWallet);
+                }
+                
+                // Check for auto-connect - sadece gerçekten bağlıysa
+                setTimeout(() => checkWalletConnection(), 1000);
             }, []);
+
+            // Update platform balance when wallet changes
+            useEffect(() => {
+                if (connection && PLATFORM_WALLET && PLATFORM_WALLET !== '11111111111111111111111111111111') {
+                    updatePlatformBalance();
+                }
+            }, [connection, PLATFORM_WALLET]);
+
+            const updatePlatformBalance = async () => {
+                try {
+                    const pubKey = new solanaWeb3.PublicKey(PLATFORM_WALLET);
+                    const lamports = await connection.getBalance(pubKey);
+                    const sol = lamports / solanaWeb3.LAMPORTS_PER_SOL;
+                    setPlatformBalance(sol);
+                } catch (error) {
+                    console.error('Platform balance error:', error);
+                }
+            };
 
             const checkWalletConnection = async () => {
                 try {
-                    if (window.solana && window.solana.isPhantom) {
+                    if (window.solana && window.solana.isPhantom && window.solana.isConnected) {
+                        // Sadece gerçekten bağlıysa otomatik bağlan
                         const response = await window.solana.connect({ onlyIfTrusted: true });
-                        if (response.publicKey) {
+                        if (response && response.publicKey) {
                             setWalletConnected(true);
                             setWalletAddress(response.publicKey.toString());
                             await updateBalance(response.publicKey.toString());
-                            setMessage('🎉 Phantom Wallet otomatik bağlandı!');
+                            showMessage('🎉 Phantom Wallet otomatik bağlandı!', 'success');
                         }
                     }
                 } catch (error) {
                     console.log('Otomatik bağlantı yok, manuel bağlantı gerekli.');
                 }
+            };
+
+            const showMessage = (msg, type = 'info') => {
+                setMessage(msg);
+                setMessageType(type);
             };
 
             const updateBalance = useCallback(async (publicKey) => {
@@ -289,6 +342,32 @@
                 }
             }, [connection]);
 
+            const generateNewPlatformWallet = async () => {
+                if (!window.solanaWeb3) {
+                    showMessage('❌ Solana Web3.js yüklenmedi. Sayfayı yenileyin.', 'error');
+                    return;
+                }
+                
+                try {
+                    // Yeni bir keypair oluştur
+                    const newKeypair = solanaWeb3.Keypair.generate();
+                    const newAddress = newKeypair.publicKey.toString();
+                    
+                    setPlatformWallet(newAddress);
+                    localStorage.setItem('platformWallet', newAddress);
+                    
+                    showMessage(`✅ Yeni platform wallet oluşturuldu!\n${newAddress}\n\n⚠️ ÖNEMLİ: Bu sadece test amaçlı bir adres.\nGerçek kullanım için güvenli bir wallet kullanın.`, 'success');
+                    
+                    // Private key'i console'a yazdır (SADECE TEST İÇİN!)
+                    console.log('TEST WALLET PRIVATE KEY (SADECE TEST İÇİN!):', 
+                        Buffer.from(newKeypair.secretKey).toString('hex'));
+                    
+                } catch (error) {
+                    console.error('Wallet generation error:', error);
+                    showMessage('❌ Wallet oluşturma hatası: ' + error.message, 'error');
+                }
+            };
+
             const connectWallet = async () => {
                 if (!window.solana || !window.solana.isPhantom) {
                     alert('Phantom Wallet bulunamadı!\nLütfen phantom.app\'dan yükleyin.');
@@ -306,10 +385,10 @@
                     
                     const currentBalance = await updateBalance(address);
                     
-                    setMessage(`🎉 Phantom Wallet bağlandı!\n👻 Adres: ${address.slice(0, 8)}...${address.slice(-8)}\n💰 Devnet Bakiye: ${currentBalance.toFixed(4)} SOL\n\n${currentBalance < 0.5 ? '⚠️ SOL az! solfaucet.com\'dan alabilirsiniz.' : '✅ NFT almaya hazır!'}`);
+                    showMessage(`🎉 Phantom Wallet bağlandı!\n👻 Adres: ${address.slice(0, 8)}...${address.slice(-8)}\n💰 Devnet Bakiye: ${currentBalance.toFixed(4)} SOL\n\n${currentBalance < 0.5 ? '⚠️ SOL az! solfaucet.com\'dan alabilirsiniz.' : '✅ NFT almaya hazır!'}`, 'success');
                 } catch (error) {
                     console.error('Wallet bağlantı hatası:', error);
-                    setMessage('❌ Wallet bağlantısı başarısız!\nLütfen Phantom\'da onay verin.');
+                    showMessage('❌ Wallet bağlantısı başarısız!\nLütfen Phantom\'da onay verin.', 'error');
                 } finally {
                     setConnecting(false);
                 }
@@ -324,7 +403,7 @@
                     setWalletAddress('');
                     setBalance(0);
                     setIsSimulation(false);
-                    setMessage('👻 Phantom wallet bağlantısı kesildi.');
+                    showMessage('👻 Phantom wallet bağlantısı kesildi.', 'info');
                 } catch (error) {
                     console.error('Disconnect hatası:', error);
                 }
@@ -335,7 +414,7 @@
                 setIsSimulation(true);
                 setWalletConnected(false);
                 setWalletAddress('');
-                setMessage('🎮 Simülasyon modu aktif!\n10 SOL ile test edebilirsiniz.\n\n(Bu gerçek blockchain değil, sadece test amaçlı)');
+                showMessage('🎮 Simülasyon modu aktif!\n10 SOL ile test edebilirsiniz.\n\n(Bu gerçek blockchain değil, sadece test amaçlı)', 'info');
             };
 
             const formatAddress = (address) => {
@@ -356,7 +435,7 @@
                     id: 1,
                     name: '🏢 Maslak Business Center',
                     location: 'Maslak, Şişli',
-                    price: 0.1, // Düşük fiyat test için
+                    price: 0.01, // Çok düşük test fiyatı
                     roi: '%7.8',
                     size: '120m²',
                     type: 'Ofis'
@@ -365,7 +444,7 @@
                     id: 2,
                     name: '🏠 Beşiktaş Premium Residence', 
                     location: 'Beşiktaş, İstanbul',
-                    price: 0.2,
+                    price: 0.02,
                     roi: '%9.1',
                     size: '180m²',
                     type: '3+1 Rezidans'
@@ -374,7 +453,7 @@
                     id: 3,
                     name: '🌊 Kadıköy Seaside Apartments',
                     location: 'Caddebostan, Kadıköy',
-                    price: 0.3,
+                    price: 0.03,
                     roi: '%7.2',
                     size: '140m²',
                     type: '3+1 Daire'
@@ -383,7 +462,7 @@
                     id: 4,
                     name: '🏡 Emirgan Luxury Villa',
                     location: 'Emirgan, Sarıyer',
-                    price: 0.5,
+                    price: 0.05,
                     roi: '%8.2', 
                     size: '450m²',
                     type: '5+2 Villa'
@@ -392,12 +471,17 @@
 
             const mintProperty = async (property) => {
                 if (!walletConnected && !isSimulation) {
-                    setMessage('❌ Önce Phantom wallet bağlayın\nveya simülasyon modunu aktif edin!');
+                    showMessage('❌ Önce Phantom wallet bağlayın\nveya simülasyon modunu aktif edin!', 'error');
+                    return;
+                }
+
+                if (PLATFORM_WALLET === '11111111111111111111111111111111') {
+                    showMessage('⚠️ Önce platform wallet oluşturun!\n"Platform Wallet Oluştur" butonuna tıklayın.', 'error');
                     return;
                 }
 
                 if (balance < property.price) {
-                    setMessage(`❌ Yetersiz SOL!\n${property.price} SOL gerekli.\nMevcut: ${balance.toFixed(4)} SOL\n\n${!isSimulation && balance < 0.5 ? '💡 solfaucet.com\'dan test SOL alabilirsiniz!' : ''}`);
+                    showMessage(`❌ Yetersiz SOL!\n${property.price} SOL gerekli.\nMevcut: ${balance.toFixed(4)} SOL\n\n${!isSimulation && balance < 0.5 ? '💡 solfaucet.com\'dan test SOL alabilirsiniz!' : ''}`, 'error');
                     return;
                 }
                 
@@ -410,23 +494,29 @@
 
             const mintWithRealSOL = async (property) => {
                 if (!connection || !window.solana) {
-                    setMessage('❌ Blockchain bağlantısı hazır değil. Lütfen tekrar deneyin.');
+                    showMessage('❌ Blockchain bağlantısı hazır değil. Lütfen tekrar deneyin.', 'error');
                     return;
                 }
 
                 setProcessing(true);
-                setMessage(`🏠 ${property.name} için SOL transferi başlatılıyor...\n⚡ Phantom onayı bekleniyor...`);
+                showMessage(`🏠 ${property.name} için SOL transferi başlatılıyor...\n⚡ Phantom onayı bekleniyor...`, 'info');
                 
                 try {
-                    const fromPubkey = new solanaWeb3.PublicKey(walletAddress);
-                    const toPubkey = new solanaWeb3.PublicKey(PLATFORM_WALLET);
+                    // Validate addresses
+                    let fromPubkey, toPubkey;
+                    try {
+                        fromPubkey = new solanaWeb3.PublicKey(walletAddress);
+                        toPubkey = new solanaWeb3.PublicKey(PLATFORM_WALLET);
+                    } catch (e) {
+                        throw new Error('Geçersiz wallet adresi. Platform wallet\'ı yeniden oluşturun.');
+                    }
                     
                     // Create transaction
                     const transaction = new solanaWeb3.Transaction().add(
                         solanaWeb3.SystemProgram.transfer({
                             fromPubkey: fromPubkey,
                             toPubkey: toPubkey,
-                            lamports: property.price * solanaWeb3.LAMPORTS_PER_SOL,
+                            lamports: Math.floor(property.price * solanaWeb3.LAMPORTS_PER_SOL),
                         })
                     );
                     
@@ -439,7 +529,7 @@
                     const signedTransaction = await window.solana.signTransaction(transaction);
                     const signature = await connection.sendRawTransaction(signedTransaction.serialize());
                     
-                    setMessage(`⏳ İşlem gönderildi!\nTX: ${signature.slice(0, 8)}...\nOnay bekleniyor...`);
+                    showMessage(`⏳ İşlem gönderildi!\nTX: ${signature.slice(0, 8)}...\nOnay bekleniyor...`, 'info');
                     
                     // Wait for confirmation
                     const confirmation = await connection.confirmTransaction(signature, 'confirmed');
@@ -448,8 +538,9 @@
                         throw new Error('Transaction failed: ' + JSON.stringify(confirmation.value.err));
                     }
                     
-                    // Update balance immediately after successful transaction
+                    // Update balances
                     const newBalance = await updateBalance(walletAddress);
+                    await updatePlatformBalance();
                     
                     // Create NFT record
                     const nftAddress = generateAddress();
@@ -471,11 +562,11 @@
                     setPortfolio(newPortfolio);
                     localStorage.setItem('realEstatePortfolio', JSON.stringify(newPortfolio));
                     
-                    setMessage(`🎉 ${property.name} NFT başarıyla mint edildi!\n⚡ Gerçek Devnet blockchain işlemi\n\n🔗 NFT: ${nftAddress.slice(0, 8)}...${nftAddress.slice(-8)}\n📋 TX: ${signature.slice(0, 8)}...\n💰 Güncel Bakiye: ${newBalance.toFixed(4)} SOL\n\n✅ Transaction onaylandı!`);
+                    showMessage(`🎉 ${property.name} NFT başarıyla mint edildi!\n⚡ Gerçek Devnet blockchain işlemi\n\n🔗 NFT: ${nftAddress.slice(0, 8)}...${nftAddress.slice(-8)}\n📋 TX: ${signature.slice(0, 8)}...\n💰 Güncel Bakiye: ${newBalance.toFixed(4)} SOL\n\n✅ Transaction onaylandı!`, 'success');
                     
                 } catch (error) {
                     console.error('Mint error:', error);
-                    setMessage(`❌ İşlem başarısız!\n${error.message}\n\nPhantom'da işlemi onayladınız mı?`);
+                    showMessage(`❌ İşlem başarısız!\n${error.message}\n\n${error.message.includes('reject') ? 'Phantom\'da işlemi onayladınız mı?' : 'Platform wallet\'ı yeniden oluşturmayı deneyin.'}`, 'error');
                     
                     // Refresh balance in case of error
                     await updateBalance(walletAddress);
@@ -486,7 +577,7 @@
 
             const mintWithSimulation = async (property) => {
                 setProcessing(true);
-                setMessage(`🎮 ${property.name} simülasyon mint ediliyor...`);
+                showMessage(`🎮 ${property.name} simülasyon mint ediliyor...`, 'info');
                 
                 setTimeout(() => {
                     const nftAddress = generateAddress();
@@ -509,7 +600,7 @@
                     const newBalance = balance - property.price;
                     setBalance(newBalance);
                     
-                    setMessage(`🎉 ${property.name} NFT mint edildi!\n🎮 Simülasyon modunda\n\n🔗 NFT: ${nftAddress.slice(0, 8)}...${nftAddress.slice(-8)}\n💰 Kalan: ${newBalance.toFixed(1)} SOL`);
+                    showMessage(`🎉 ${property.name} NFT mint edildi!\n🎮 Simülasyon modunda\n\n🔗 NFT: ${nftAddress.slice(0, 8)}...${nftAddress.slice(-8)}\n💰 Kalan: ${newBalance.toFixed(1)} SOL`, 'success');
                     setProcessing(false);
                 }, 2000);
             };
@@ -542,7 +633,7 @@
                                     </div>
                                     <div style={{fontSize: '12px', opacity: '0.8', marginBottom: '15px'}}>
                                         ⚡ Gerçek Solana Devnet bağlantısı aktif
-                                        {balance < 0.5 && <div style={{color: '#ff6b6b', marginTop: '5px'}}>
+                                        {balance < 0.1 && <div style={{color: '#ff6b6b', marginTop: '5px'}}>
                                             ⚠️ Bakiye düşük! <a href="https://solfaucet.com" target="_blank" style={{color: '#22c55e'}}>solfaucet.com</a>'dan test SOL alabilirsiniz
                                         </div>}
                                     </div>
@@ -589,7 +680,35 @@
                         </div>
                     </div>
 
-                    <div className={`status ${processing ? 'processing' : ''}`}>{message}</div>
+                    <div className={`status ${messageType === 'error' ? 'error' : ''} ${processing ? 'processing' : ''}`}>
+                        {message}
+                    </div>
+
+                    <div className="platform-wallet-info">
+                        <div style={{fontSize: '14px', fontWeight: 'bold', marginBottom: '10px'}}>
+                            💼 Platform Treasury Wallet
+                        </div>
+                        <div style={{fontSize: '12px', marginBottom: '10px', wordBreak: 'break-all'}}>
+                            {PLATFORM_WALLET === '11111111111111111111111111111111' ? 
+                                '⚠️ Platform wallet henüz oluşturulmadı' : 
+                                <>
+                                    {PLATFORM_WALLET}
+                                    <div style={{marginTop: '5px', color: '#22c55e'}}>
+                                        💰 Treasury Bakiye: {platformBalance.toFixed(4)} SOL
+                                    </div>
+                                </>
+                            }
+                        </div>
+                        <button 
+                            className="button generate-wallet-button" 
+                            onClick={generateNewPlatformWallet}
+                        >
+                            🔑 Platform Wallet Oluştur (Test)
+                        </button>
+                        <div style={{fontSize: '10px', marginTop: '8px', opacity: '0.7'}}>
+                            NFT satın alımlarında SOL bu adrese gönderilir
+                        </div>
+                    </div>
 
                     <div className="properties-grid">
                         {properties.map(property => (
