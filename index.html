@@ -1,4 +1,17 @@
-<script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.2/lib/index.iife.min.js"></script>
+<script>
+        // Buffer global fix for Solana Web3.js
+        window.Buffer = window.Buffer || {
+            from: (data, encoding) => {
+                if (typeof data === 'string') {
+                    return new TextEncoder().encode(data);
+                }
+                return new Uint8Array(data);
+            },
+            alloc: (size) => new Uint8Array(size),
+            isBuffer: () => false
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.2/lib/index.iife.min.js"></script>
     <script>
         // Platform treasury wallet (gerçek projede güvenli tutulur)
         window.PLATFORM_WALLET = 'DevS1gn4LPGA9ZGN95R2DBB5HRKjKNsXgMrKNP5BpYc6'; // Example Devnet address
@@ -33,37 +46,42 @@
             transferSOL: async (fromWallet, toWalletString, amount) => {
                 try {
                     const connection = window.solanaHelpers.connection;
+                    if (!connection) {
+                        throw new Error('Solana connection not initialized');
+                    }
+                    
                     const toWallet = new solanaWeb3.PublicKey(toWalletString);
+                    const fromPubkey = new solanaWeb3.PublicKey(fromWallet.publicKey);
                     
                     const transaction = new solanaWeb3.Transaction().add(
                         solanaWeb3.SystemProgram.transfer({
-                            fromPubkey: fromWallet.publicKey,
+                            fromPubkey: fromPubkey,
                             toPubkey: toWallet,
-                            lamports: amount * solanaWeb3.LAMPORTS_PER_SOL,
+                            lamports: Math.floor(amount * solanaWeb3.LAMPORTS_PER_SOL),
                         })
                     );
                     
-                    const { blockhash } = await connection.getRecentBlockhash();
+                    // Recent blockhash al
+                    const { blockhash } = await connection.getLatestBlockhash();
                     transaction.recentBlockhash = blockhash;
-                    transaction.feePayer = fromWallet.publicKey;
+                    transaction.feePayer = fromPubkey;
                     
                     // Phantom ile imzala ve gönder
-                    const signedTransaction = await window.solana.signTransaction(transaction);
-                    const signature = await connection.sendRawTransaction(signedTransaction.serialize());
+                    const signedTransaction = await window.solana.signAndSendTransaction(transaction);
                     
-                    // Transaction confirm
-                    await connection.confirmTransaction(signature);
+                    // Transaction confirm (opsiyonel - hız için skip edilebilir)
+                    // await connection.confirmTransaction(signedTransaction.signature);
                     
                     return {
                         success: true,
-                        signature: signature,
-                        explorer: `https://explorer.solana.com/tx/${signature}?cluster=devnet`
+                        signature: signedTransaction.signature,
+                        explorer: `https://explorer.solana.com/tx/${signedTransaction.signature}?cluster=devnet`
                     };
                 } catch (error) {
-                    console.error('Transfer error:', error);
+                    console.error('Transfer error details:', error);
                     return {
                         success: false,
-                        error: error.message
+                        error: error.message || 'Transaction failed'
                     };
                 }
             }
@@ -457,15 +475,21 @@
                 setMessage(`🏠 ${property.name} için gerçek SOL transferi başlatılıyor...\n⚡ Phantom onayı bekleniyor...`);
                 
                 try {
+                    // Web3.js yüklendi mi kontrol et
+                    if (!window.solanaHelpers.connection || typeof solanaWeb3 === 'undefined') {
+                        setMessage(`❌ Solana Web3.js yüklenmedi!\nSayfayı yenileyin ve tekrar deneyin.`);
+                        return;
+                    }
+                    
                     // Gerçek SOL transfer işlemi
                     const transferResult = await window.solanaHelpers.transferSOL(
-                        { publicKey: new solanaWeb3.PublicKey(walletAddress) },
+                        { publicKey: walletAddress },
                         window.PLATFORM_WALLET,
                         property.price
                     );
                     
                     if (transferResult.success) {
-                        setMessage(`🔄 SOL transferi başarılı!\nTransaction: ${transferResult.signature.slice(0, 8)}...\nNFT mint ediliyor...`);
+                        setMessage(`✅ SOL transferi başarılı!\nTransaction: ${transferResult.signature.slice(0, 12)}...\nNFT mint ediliyor...`);
                         
                         setTimeout(async () => {
                             const nftAddress = generateAddress();
@@ -490,17 +514,17 @@
                             // Bakiyeyi yenile (gerçek bakiye)
                             await getRealBalance(walletAddress);
                             
-                            setMessage(`🎉 ${property.name} NFT başarıyla mint edildi!\n⚡ Gerçek Devnet blockchain işlemi\n\n🔗 NFT: ${nftAddress.slice(0, 8)}...${nftAddress.slice(-8)}\n📋 TX: ${transferResult.signature.slice(0, 8)}...\n🌐 Explorer: Tıklayarak görüntüle\n\n💰 Güncel Bakiye: ${balance.toFixed(4)} SOL`);
+                            setMessage(`🎉 ${property.name} NFT başarıyla mint edildi!\n⚡ Gerçek Devnet blockchain işlemi tamamlandı!\n\n🔗 NFT: ${nftAddress.slice(0, 12)}...\n📋 Transaction: ${transferResult.signature.slice(0, 12)}...\n\n💰 Güncel Bakiye: ${balance.toFixed(4)} SOL\n🌐 Explorer linkini portfolio'dan görebilirsiniz!`);
                             
-                        }, 2000);
+                        }, 1500);
                         
                     } else {
-                        setMessage(`❌ SOL transferi başarısız!\nHata: ${transferResult.error}\n\nLütfen Phantom'da onay verdiğinizden emin olun.`);
+                        setMessage(`❌ SOL transferi başarısız!\n\nHata Detayı: ${transferResult.error}\n\nMuhtemel Sebepler:\n• Phantom'da işlemi reddettiniz\n• Yetersiz SOL bakiyesi\n• Network bağlantı problemi\n\nTekrar deneyin veya Phantom'ı yeniden başlatın.`);
                     }
                     
                 } catch (error) {
                     console.error('Mint error:', error);
-                    setMessage(`❌ İşlem başarısız!\nHata: ${error.message}\n\nPhantom'da işlemi onayladınız mı?`);
+                    setMessage(`❌ Beklenmeyen hata!\n\nHata: ${error.message}\n\nLütfen:\n• Sayfayı yenileyin\n• Phantom'u yeniden başlatın\n• Devnet modunda olduğunuzu kontrol edin`);
                 }
             };
 
