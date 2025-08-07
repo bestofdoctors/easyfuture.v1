@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RealEstate NFT - Test</title>
+    <title>RealEstate NFT - Phantom Test</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.22.5/babel.min.js"></script>
@@ -23,7 +23,7 @@
         }
         
         .container {
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
         }
         
@@ -46,45 +46,101 @@
         .subtitle {
             font-size: 18px;
             opacity: 0.9;
+            margin-bottom: 20px;
+        }
+        
+        .wallet-section {
+            margin-top: 20px;
+        }
+        
+        .button {
+            padding: 12px 24px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            margin: 5px;
+            transition: all 0.3s ease;
+        }
+        
+        .button:hover {
+            transform: translateY(-2px);
+        }
+        
+        .button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .phantom-button {
+            background: linear-gradient(45deg, #9945FF, #7c3aed);
+            color: white;
+        }
+        
+        .sim-button {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .disconnect-button {
+            background: rgba(255, 107, 107, 0.2);
+            color: white;
+            border: 1px solid #ff6b6b;
+        }
+        
+        .properties-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
         }
         
         .property-card {
             background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
             border-radius: 15px;
-            padding: 30px;
-            margin: 20px 0;
+            padding: 25px;
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
         
         .property-name {
-            font-size: 24px;
+            font-size: 20px;
             font-weight: bold;
             color: #22c55e;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
         }
         
         .property-details {
-            font-size: 16px;
+            font-size: 15px;
             margin-bottom: 20px;
             line-height: 1.6;
+            opacity: 0.9;
         }
         
         .buy-button {
             background: linear-gradient(45deg, #22c55e, #16a34a);
             color: white;
             border: none;
-            padding: 15px 30px;
+            padding: 12px 20px;
             border-radius: 8px;
             cursor: pointer;
             font-weight: 600;
-            font-size: 16px;
+            width: 100%;
             transition: all 0.3s ease;
         }
         
-        .buy-button:hover {
+        .buy-button:hover:not(:disabled) {
             transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(34, 197, 94, 0.3);
+            box-shadow: 0 8px 16px rgba(34, 197, 94, 0.3);
+        }
+        
+        .buy-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
         }
         
         .status {
@@ -92,8 +148,45 @@
             border: 1px solid #22c55e;
             border-radius: 8px;
             padding: 15px;
-            margin: 15px 0;
+            margin: 20px 0;
             text-align: center;
+            white-space: pre-line;
+        }
+        
+        .portfolio {
+            background: rgba(153, 69, 255, 0.1);
+            border: 1px solid #9945FF;
+            border-radius: 15px;
+            padding: 25px;
+            margin: 20px 0;
+        }
+        
+        .portfolio-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #9945FF;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .nft-item {
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid #22c55e;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        
+        .nft-name {
+            font-weight: bold;
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+        
+        .nft-details {
+            font-size: 13px;
+            opacity: 0.9;
+            line-height: 1.4;
         }
     </style>
 </head>
@@ -104,35 +197,62 @@
         const { useState } = React;
 
         function App() {
-            const [message, setMessage] = useState('RealEstate NFT Marketplace hazır!');
+            const [message, setMessage] = useState('Phantom wallet bağlayın veya simülasyon modunda devam edin.');
             const [portfolio, setPortfolio] = useState([]);
-            const [balance, setBalance] = useState(5.0);
-            
-            const testMint = () => {
-                if (balance < 25) {
-                    setMessage('❌ Yetersiz SOL! 25 SOL gerekli.');
+            const [balance, setBalance] = useState(0);
+            const [walletConnected, setWalletConnected] = useState(false);
+            const [walletAddress, setWalletAddress] = useState('');
+            const [connecting, setConnecting] = useState(false);
+
+            const connectWallet = async () => {
+                if (!window.solana || !window.solana.isPhantom) {
+                    alert('Phantom Wallet bulunamadı!\nLütfen phantom.app\'dan yükleyin.');
+                    window.open('https://phantom.app/', '_blank');
                     return;
                 }
-                
-                setMessage('🏠 Emirgan Villa NFT mint ediliyor...');
-                
-                setTimeout(() => {
-                    const nftAddress = generateAddress();
-                    const newNFT = {
-                        id: Date.now(),
-                        name: 'Emirgan Luxury Villa',
-                        address: nftAddress,
-                        price: '25 SOL',
-                        location: 'Emirgan, Sarıyer',
-                        mintDate: new Date().toLocaleDateString('tr-TR')
-                    };
+
+                setConnecting(true);
+                try {
+                    const response = await window.solana.connect();
+                    setWalletConnected(true);
+                    setWalletAddress(response.publicKey.toString());
                     
-                    setPortfolio(prev => [...prev, newNFT]);
-                    setBalance(prev => prev - 25);
-                    setMessage(`🎉 Emlak NFT mint edildi!\nAdres: ${nftAddress}\nKalan bakiye: ${(balance - 25).toFixed(1)} SOL`);
-                }, 2000);
+                    // Mock Devnet balance
+                    const mockBalance = 2.5 + Math.random() * 5;
+                    setBalance(mockBalance);
+                    
+                    setMessage('🎉 Phantom Wallet bağlandı!\nDevnet\'te ücretsiz işlem yapabilirsiniz.');
+                } catch (error) {
+                    console.error('Wallet bağlantı hatası:', error);
+                    setMessage('❌ Wallet bağlantısı başarısız!');
+                } finally {
+                    setConnecting(false);
+                }
             };
-            
+
+            const disconnectWallet = async () => {
+                try {
+                    if (window.solana) {
+                        await window.solana.disconnect();
+                    }
+                    setWalletConnected(false);
+                    setWalletAddress('');
+                    setBalance(0);
+                    setMessage('Wallet bağlantısı kesildi.');
+                } catch (error) {
+                    console.error('Disconnect hatası:', error);
+                }
+            };
+
+            const useSimulationMode = () => {
+                setBalance(10.0);
+                setMessage('🎮 Simülasyon modu aktif!\n10 SOL ile test edebilirsiniz.');
+            };
+
+            const formatAddress = (address) => {
+                return `${address.slice(0, 4)}...${address.slice(-4)}`;
+            };
+
             const generateAddress = () => {
                 const chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
                 let result = '';
@@ -142,51 +262,160 @@
                 return result;
             };
 
+            const properties = [
+                {
+                    id: 1,
+                    name: '🏢 Maslak Business Center',
+                    location: 'Maslak, Şişli',
+                    price: 4,
+                    roi: '%7.8',
+                    size: '120m²',
+                    type: 'Ofis'
+                },
+                {
+                    id: 2,
+                    name: '🏠 Beşiktaş Premium Residence', 
+                    location: 'Beşiktaş, İstanbul',
+                    price: 6,
+                    roi: '%9.1',
+                    size: '180m²',
+                    type: '3+1 Rezidans'
+                },
+                {
+                    id: 3,
+                    name: '🌊 Kadıköy Seaside Apartments',
+                    location: 'Caddebostan, Kadıköy',
+                    price: 8,
+                    roi: '%7.2',
+                    size: '140m²',
+                    type: '3+1 Daire'
+                },
+                {
+                    id: 4,
+                    name: '🏡 Emirgan Luxury Villa',
+                    location: 'Emirgan, Sarıyer',
+                    price: 25,
+                    roi: '%8.2', 
+                    size: '450m²',
+                    type: '5+2 Villa'
+                }
+            ];
+
+            const mintProperty = (property) => {
+                if (!walletConnected && balance === 0) {
+                    setMessage('❌ Önce Phantom wallet bağlayın\nveya simülasyon modunu aktif edin!');
+                    return;
+                }
+
+                if (balance < property.price) {
+                    setMessage(`❌ Yetersiz SOL!\n${property.price} SOL gerekli.\nMevcut: ${balance.toFixed(1)} SOL`);
+                    return;
+                }
+                
+                setMessage(`🏠 ${property.name} NFT mint ediliyor...\n${walletConnected ? '⚡ Devnet blockchain' : '🎮 Simülasyon modu'}`);
+                
+                setTimeout(() => {
+                    const nftAddress = generateAddress();
+                    const newNFT = {
+                        id: Date.now(),
+                        name: property.name,
+                        address: nftAddress,
+                        price: `${property.price} SOL`,
+                        location: property.location,
+                        roi: property.roi,
+                        mintDate: new Date().toLocaleDateString('tr-TR'),
+                        isReal: walletConnected
+                    };
+                    
+                    setPortfolio(prev => [...prev, newNFT]);
+                    setBalance(prev => prev - property.price);
+                    
+                    setMessage(`🎉 ${property.name} NFT mint edildi!\n${walletConnected ? '⚡ Devnet blockchain\'de kayıtlı' : '🎮 Simülasyon test'}\n\n🔗 Adres: ${nftAddress.slice(0, 12)}...${nftAddress.slice(-12)}\n💰 Kalan: ${(balance - property.price).toFixed(1)} SOL`);
+                }, 2500);
+            };
+
             return (
                 <div className="container">
                     <div className="header">
                         <div className="title">🏠 RealEstate NFT</div>
-                        <div className="subtitle">Emlak Yatırım Platformu - Test Modu</div>
-                        <div style={{marginTop: '15px', fontSize: '18px', color: '#22c55e'}}>
-                            💰 Bakiye: {balance.toFixed(1)} SOL
+                        <div className="subtitle">Blockchain Emlak Yatırım Platformu</div>
+                        
+                        <div className="wallet-section">
+                            {walletConnected ? (
+                                <div>
+                                    <div style={{fontSize: '16px', color: '#22c55e', marginBottom: '10px'}}>
+                                        👻 Phantom: {formatAddress(walletAddress)}
+                                    </div>
+                                    <div style={{fontSize: '18px', color: '#ffd700', marginBottom: '15px'}}>
+                                        💰 Devnet Bakiye: {balance.toFixed(2)} SOL
+                                    </div>
+                                    <button className="button disconnect-button" onClick={disconnectWallet}>
+                                        🔌 Bağlantıyı Kes
+                                    </button>
+                                </div>
+                            ) : (
+                                <div>
+                                    <button 
+                                        className="button phantom-button" 
+                                        onClick={connectWallet}
+                                        disabled={connecting}
+                                    >
+                                        {connecting ? '⏳ Bağlanıyor...' : '👻 Phantom Bağla (Devnet)'}
+                                    </button>
+                                    
+                                    <button className="button sim-button" onClick={useSimulationMode}>
+                                        🎮 Simülasyon Modu (10 SOL)
+                                    </button>
+                                    
+                                    <div style={{fontSize: '12px', opacity: '0.8', marginTop: '10px'}}>
+                                        Phantom: Gerçek Devnet (ücretsiz) | Simülasyon: Test modu
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 
-                    <div className="property-card">
-                        <div className="property-name">Emirgan Luxury Villa</div>
-                        <div className="property-details">
-                            📍 Emirgan, Sarıyer, İstanbul<br/>
-                            🏡 450m² - 5+2 Villa<br/>
-                            💰 Hisse Fiyatı: 25 SOL<br/>
-                            📈 ROI: %8.2
-                        </div>
-                        <button className="buy-button" onClick={testMint}>
-                            🎯 Test NFT Mint Et
-                        </button>
-                    </div>
+                    <div className="status">{message}</div>
 
-                    <div className="status">
-                        {message}
+                    <div className="properties-grid">
+                        {properties.map(property => (
+                            <div key={property.id} className="property-card">
+                                <div className="property-name">{property.name}</div>
+                                <div className="property-details">
+                                    📍 {property.location}<br/>
+                                    🏡 {property.size} - {property.type}<br/>
+                                    💰 Hisse Fiyatı: {property.price} SOL<br/>
+                                    📈 ROI: {property.roi}
+                                </div>
+                                <button 
+                                    className="buy-button"
+                                    onClick={() => mintProperty(property)}
+                                    disabled={balance < property.price}
+                                >
+                                    {balance >= property.price ? 
+                                        `🎯 ${property.price} SOL ile NFT Al` : 
+                                        `❌ Yetersiz SOL (${property.price} gerekli)`
+                                    }
+                                </button>
+                            </div>
+                        ))}
                     </div>
 
                     {portfolio.length > 0 && (
-                        <div className="property-card">
-                            <div className="property-name">🏡 Emlak NFT Portfolyöm ({portfolio.length})</div>
+                        <div className="portfolio">
+                            <div className="portfolio-title">
+                                🏡 Emlak NFT Portfolyöm ({portfolio.length})
+                            </div>
+                            
                             {portfolio.map(nft => (
-                                <div key={nft.id} style={{
-                                    background: 'rgba(34, 197, 94, 0.1)',
-                                    border: '1px solid #22c55e',
-                                    borderRadius: '8px',
-                                    padding: '15px',
-                                    margin: '10px 0'
-                                }}>
-                                    <div style={{fontWeight: 'bold', marginBottom: '5px'}}>
-                                        {nft.name}
+                                <div key={nft.id} className="nft-item">
+                                    <div className="nft-name">
+                                        {nft.name} {nft.isReal && <span style={{color: '#9945FF', fontSize: '12px'}}>⚡ DEVNET</span>}
                                     </div>
-                                    <div style={{fontSize: '14px', opacity: '0.9'}}>
+                                    <div className="nft-details">
                                         📍 {nft.location}<br/>
                                         🔗 {nft.address.slice(0, 8)}...{nft.address.slice(-8)}<br/>
-                                        📅 {nft.mintDate} • {nft.price}
+                                        📅 {nft.mintDate} • {nft.price} • ROI {nft.roi}
                                     </div>
                                 </div>
                             ))}
