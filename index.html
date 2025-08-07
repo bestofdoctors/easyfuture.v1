@@ -235,7 +235,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useCallback } = React;
+        const { useState, useEffect, useCallback, useRef } = React;
 
         function App() {
             const [message, setMessage] = useState('Phantom wallet\'ınızı Devnet\'e bağlayın');
@@ -247,6 +247,7 @@
             const [connecting, setConnecting] = useState(false);
             const [processing, setProcessing] = useState(false);
             const [connection, setConnection] = useState(null);
+            const hasAutoConnected = useRef(false);
 
             // Initialize Solana connection
             useEffect(() => {
@@ -258,11 +259,19 @@
                         );
                         setConnection(conn);
                         console.log('Solana Devnet connection initialized');
-                    } else {
-                        setTimeout(initConnection, 500);
+                        return true;
+                    }
+                    return false;
+                };
+                
+                const tryInit = async () => {
+                    const success = await initConnection();
+                    if (!success) {
+                        setTimeout(tryInit, 500);
                     }
                 };
-                initConnection();
+                
+                tryInit();
             }, []);
 
             // Load portfolio from localStorage
@@ -275,21 +284,30 @@
                         console.error('Portfolio yükleme hatası:', error);
                     }
                 }
-                
-                // Check for auto-connect after delay
-                setTimeout(() => checkWalletConnection(), 1000);
             }, []);
+
+            // Auto-connect check - only once
+            useEffect(() => {
+                if (connection && !hasAutoConnected.current) {
+                    hasAutoConnected.current = true;
+                    setTimeout(() => checkWalletConnection(), 1500);
+                }
+            }, [connection]);
 
             const checkWalletConnection = async () => {
                 try {
                     if (window.solana && window.solana.isPhantom) {
-                        // Try to connect silently
                         const response = await window.solana.connect({ onlyIfTrusted: true });
                         if (response && response.publicKey) {
+                            const address = response.publicKey.toString();
                             setWalletConnected(true);
-                            setWalletAddress(response.publicKey.toString());
-                            await updateBalance(response.publicKey.toString());
-                            showMessage('🎉 Phantom Wallet otomatik bağlandı!', 'success');
+                            setWalletAddress(address);
+                            
+                            // Wait a bit before updating balance
+                            setTimeout(async () => {
+                                const bal = await updateBalance(address);
+                                showMessage(`🎉 Phantom Wallet otomatik bağlandı!\n💰 Bakiye: ${bal.toFixed(4)} SOL`, 'success');
+                            }, 500);
                         }
                     }
                 } catch (error) {
@@ -303,9 +321,8 @@
             };
 
             const updateBalance = useCallback(async (publicKey) => {
-                if (!connection) {
-                    setTimeout(() => updateBalance(publicKey), 500);
-                    return;
+                if (!connection || !publicKey) {
+                    return 0;
                 }
 
                 try {
@@ -313,6 +330,7 @@
                     const lamports = await connection.getBalance(pubKey);
                     const sol = lamports / solanaWeb3.LAMPORTS_PER_SOL;
                     setBalance(sol);
+                    console.log('Balance updated:', sol);
                     return sol;
                 } catch (error) {
                     console.error('Balance update error:', error);
@@ -328,6 +346,11 @@
                     return;
                 }
 
+                if (!connection) {
+                    showMessage('⏳ Bağlantı hazırlanıyor, lütfen tekrar deneyin...', 'warning');
+                    return;
+                }
+
                 setConnecting(true);
                 try {
                     const response = await window.solana.connect();
@@ -339,7 +362,7 @@
                     
                     showMessage(
                         `🎉 Phantom Wallet bağlandı!\n👻 Adres: ${address.slice(0, 8)}...${address.slice(-8)}\n💰 Devnet Bakiye: ${currentBalance.toFixed(4)} SOL\n\n${
-                            currentBalance < 0.1 ? '⚠️ Test SOL\'a ihtiyacınız var! solfaucet.com\'dan alabilirsiniz.' : '✅ NFT almaya hazır!'
+                            currentBalance < 0.5 ? '⚠️ Test SOL\'a ihtiyacınız var! solfaucet.com\'dan alabilirsiniz.' : '✅ NFT almaya hazır!'
                         }`,
                         'success'
                     );
@@ -370,7 +393,6 @@
             };
 
             const generateNFTAddress = () => {
-                // Generate a random base58 string that looks like a Solana address
                 const chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
                 let result = '';
                 for (let i = 0; i < 44; i++) {
@@ -384,7 +406,7 @@
                     id: 1,
                     name: '🏢 Maslak Business Center',
                     location: 'Maslak, Şişli',
-                    price: 0.01,
+                    price: 0.1,  // 0.1 SOL
                     roi: '%7.8',
                     size: '120m²',
                     type: 'Ofis'
@@ -393,7 +415,7 @@
                     id: 2,
                     name: '🏠 Beşiktaş Premium Residence', 
                     location: 'Beşiktaş, İstanbul',
-                    price: 0.02,
+                    price: 0.2,  // 0.2 SOL
                     roi: '%9.1',
                     size: '180m²',
                     type: '3+1 Rezidans'
@@ -402,7 +424,7 @@
                     id: 3,
                     name: '🌊 Kadıköy Seaside Apartments',
                     location: 'Caddebostan, Kadıköy',
-                    price: 0.03,
+                    price: 0.3,  // 0.3 SOL
                     roi: '%7.2',
                     size: '140m²',
                     type: '3+1 Daire'
@@ -411,7 +433,7 @@
                     id: 4,
                     name: '🏡 Emirgan Luxury Villa',
                     location: 'Emirgan, Sarıyer',
-                    price: 0.05,
+                    price: 0.5,  // 0.5 SOL
                     roi: '%8.2', 
                     size: '450m²',
                     type: '5+2 Villa'
@@ -424,9 +446,13 @@
                     return;
                 }
 
-                if (balance < property.price) {
+                // Round the balance and price to avoid floating point issues
+                const roundedBalance = Math.floor(balance * 1000000) / 1000000;
+                const roundedPrice = Math.floor(property.price * 1000000) / 1000000;
+
+                if (roundedBalance < roundedPrice) {
                     showMessage(
-                        `❌ Yetersiz SOL!\n${property.price} SOL gerekli.\nMevcut: ${balance.toFixed(4)} SOL\n\n💡 solfaucet.com\'dan test SOL alabilirsiniz!`,
+                        `❌ Yetersiz SOL!\n${roundedPrice} SOL gerekli.\nMevcut: ${roundedBalance.toFixed(4)} SOL\n\n💡 solfaucet.com\'dan test SOL alabilirsiniz!`,
                         'error'
                     );
                     return;
@@ -445,30 +471,22 @@
                 showMessage(`🏠 ${property.name} NFT mint ediliyor...\n⏳ İşlem hazırlanıyor...`, 'info');
                 
                 try {
-                    // Create a mock NFT mint transaction
-                    // In real implementation, this would mint an actual NFT
                     const fromPubkey = new solanaWeb3.PublicKey(walletAddress);
                     
-                    // Create a simple transaction for demo
-                    // This just sends a tiny amount to demonstrate the transaction flow
+                    // Convert SOL to lamports (multiply by 10^9)
+                    const lamportsToSend = Math.floor(property.price * solanaWeb3.LAMPORTS_PER_SOL);
+                    
+                    // Create a simple transfer transaction
                     const transaction = new solanaWeb3.Transaction().add(
                         solanaWeb3.SystemProgram.transfer({
                             fromPubkey: fromPubkey,
-                            toPubkey: fromPubkey, // Send to self for demo
-                            lamports: 1000, // 0.000001 SOL - minimal fee
+                            toPubkey: fromPubkey, // Send to self as demo
+                            lamports: lamportsToSend,
                         })
                     );
                     
-                    // Add memo to simulate NFT metadata
-                    const memoInstruction = new solanaWeb3.TransactionInstruction({
-                        keys: [],
-                        programId: new solanaWeb3.PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr'),
-                        data: new TextEncoder().encode(`NFT: ${property.name}`)
-                    });
-                    transaction.add(memoInstruction);
-                    
                     // Get recent blockhash
-                    const { blockhash } = await connection.getLatestBlockhash();
+                    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
                     transaction.recentBlockhash = blockhash;
                     transaction.feePayer = fromPubkey;
                     
@@ -480,55 +498,61 @@
                     
                     showMessage(`⏳ İşlem gönderildi!\nTX: ${signature.slice(0, 8)}...\nBlockchain onayı bekleniyor...`, 'info');
                     
-                    // Wait for confirmation
-                    const confirmation = await connection.confirmTransaction(signature, 'confirmed');
+                    // Wait for confirmation with timeout
+                    const confirmation = await connection.confirmTransaction({
+                        signature,
+                        blockhash,
+                        lastValidBlockHeight
+                    });
                     
                     if (confirmation.value.err) {
                         throw new Error('Transaction failed');
                     }
                     
-                    // Update balance after transaction
-                    const newBalance = await updateBalance(walletAddress);
-                    
-                    // Create NFT record
-                    const nftAddress = generateNFTAddress();
-                    const newNFT = {
-                        id: Date.now(),
-                        name: property.name,
-                        address: nftAddress,
-                        price: `${property.price} SOL`,
-                        location: property.location,
-                        roi: property.roi,
-                        size: property.size,
-                        type: property.type,
-                        mintDate: new Date().toLocaleDateString('tr-TR'),
-                        mintTime: new Date().toLocaleTimeString('tr-TR'),
-                        walletAddress: walletAddress,
-                        transactionHash: signature,
-                        explorerUrl: `https://explorer.solana.com/tx/${signature}?cluster=devnet`
-                    };
-                    
-                    // Save to portfolio
-                    const newPortfolio = [...portfolio, newNFT];
-                    setPortfolio(newPortfolio);
-                    localStorage.setItem('realEstatePortfolio', JSON.stringify(newPortfolio));
-                    
-                    showMessage(
-                        `🎉 ${property.name} NFT başarıyla mint edildi!\n\n🔗 NFT Token: ${nftAddress.slice(0, 8)}...${nftAddress.slice(-8)}\n📋 Transaction: ${signature.slice(0, 8)}...\n💰 Güncel Bakiye: ${newBalance.toFixed(4)} SOL\n\n✅ NFT portfolyönüze eklendi!`,
-                        'success'
-                    );
+                    // Wait a bit before updating balance
+                    setTimeout(async () => {
+                        const newBalance = await updateBalance(walletAddress);
+                        
+                        // Create NFT record
+                        const nftAddress = generateNFTAddress();
+                        const newNFT = {
+                            id: Date.now(),
+                            name: property.name,
+                            address: nftAddress,
+                            price: `${property.price} SOL`,
+                            location: property.location,
+                            roi: property.roi,
+                            size: property.size,
+                            type: property.type,
+                            mintDate: new Date().toLocaleDateString('tr-TR'),
+                            mintTime: new Date().toLocaleTimeString('tr-TR'),
+                            walletAddress: walletAddress,
+                            transactionHash: signature,
+                            explorerUrl: `https://explorer.solana.com/tx/${signature}?cluster=devnet`
+                        };
+                        
+                        // Save to portfolio
+                        const newPortfolio = [...portfolio, newNFT];
+                        setPortfolio(newPortfolio);
+                        localStorage.setItem('realEstatePortfolio', JSON.stringify(newPortfolio));
+                        
+                        showMessage(
+                            `🎉 ${property.name} NFT başarıyla mint edildi!\n\n🔗 NFT Token: ${nftAddress.slice(0, 8)}...${nftAddress.slice(-8)}\n📋 Transaction: ${signature.slice(0, 8)}...\n💰 Güncel Bakiye: ${newBalance.toFixed(4)} SOL\n\n✅ NFT portfolyönüze eklendi!`,
+                            'success'
+                        );
+                    }, 1000);
                     
                 } catch (error) {
                     console.error('Mint error:', error);
                     
-                    if (error.message.includes('User rejected')) {
+                    if (error.message && error.message.includes('User rejected')) {
                         showMessage('❌ İşlem iptal edildi.\nPhantom\'da işlemi onaylamanız gerekiyor.', 'error');
                     } else {
                         showMessage(`❌ İşlem başarısız!\n${error.message || 'Bilinmeyen hata'}\n\nLütfen tekrar deneyin.`, 'error');
                     }
                     
                     // Refresh balance
-                    await updateBalance(walletAddress);
+                    setTimeout(() => updateBalance(walletAddress), 500);
                 } finally {
                     setProcessing(false);
                 }
@@ -537,6 +561,10 @@
             // Auto-refresh balance every 15 seconds when wallet connected
             useEffect(() => {
                 if (walletConnected && walletAddress && !processing) {
+                    // Initial balance update
+                    updateBalance(walletAddress);
+                    
+                    // Set interval for periodic updates
                     const interval = setInterval(() => {
                         updateBalance(walletAddress);
                     }, 15000);
@@ -571,7 +599,7 @@
                                     </div>
                                     <div style={{fontSize: '12px', opacity: '0.8', marginBottom: '15px'}}>
                                         ⚡ Gerçek Solana Devnet bağlantısı aktif
-                                        {balance < 0.1 && (
+                                        {balance < 0.5 && (
                                             <div style={{color: '#ff6b6b', marginTop: '5px'}}>
                                                 ⚠️ Bakiye düşük! <a href="https://solfaucet.com" target="_blank" rel="noopener noreferrer" style={{color: '#22c55e'}}>solfaucet.com</a>'dan test SOL alabilirsiniz
                                             </div>
@@ -586,7 +614,7 @@
                                     <button 
                                         className="button phantom-button" 
                                         onClick={connectWallet}
-                                        disabled={connecting}
+                                        disabled={connecting || !connection}
                                     >
                                         {connecting ? (
                                             <>
