@@ -417,6 +417,16 @@
                     }
                 };
                 checkAndInit();
+                
+                // Kaydedilmiş NFT'leri yükle
+                const savedNFTs = localStorage.getItem('myNFTs');
+                if (savedNFTs) {
+                    try {
+                        setMyNFTs(JSON.parse(savedNFTs));
+                    } catch (error) {
+                        console.error('NFT verisi yüklenirken hata:', error);
+                    }
+                }
             }, []);
 
             const checkWalletConnection = async () => {
@@ -501,7 +511,12 @@
                     };
 
                     setLastMintedNFT(mockNFT);
-                    setMyNFTs(prevNFTs => [mockNFT, ...prevNFTs]);
+                    setMyNFTs(prevNFTs => {
+                        const newNFTs = [mockNFT, ...prevNFTs];
+                        // LocalStorage'a kaydet
+                        localStorage.setItem('myNFTs', JSON.stringify(newNFTs));
+                        return newNFTs;
+                    });
                     setMintStatus('🎉 NFT başarıyla mint edildi!');
                     
                     setNftName('');
@@ -645,8 +660,25 @@
                                     <button 
                                         className="view-nft-button"
                                         onClick={() => window.open(nft.image, '_blank')}
+                                        style={{marginRight: '10px'}}
                                     >
                                         🖼️ Görüntüle
+                                    </button>
+                                    
+                                    <button 
+                                        className="view-nft-button"
+                                        onClick={() => {
+                                            if (confirm(`"${nft.name}" NFT'sini koleksiyondan kaldırmak istediğinizden emin misiniz?`)) {
+                                                setMyNFTs(prevNFTs => {
+                                                    const newNFTs = prevNFTs.filter(n => n.id !== nft.id);
+                                                    localStorage.setItem('myNFTs', JSON.stringify(newNFTs));
+                                                    return newNFTs;
+                                                });
+                                            }
+                                        }}
+                                        style={{background: '#ff6b6b'}}
+                                    >
+                                        🗑️ Sil
                                     </button>
                                 </div>
                             ))}
